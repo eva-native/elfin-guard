@@ -6,7 +6,7 @@ VERSION="0.0.1a"
 function make_ipv6 {
   if [[ -f /etc/machine-id ]] ; then
     local hash="$(printf "$(date +%s%N)$(</etc/machine-id)" | sha1sum | cut -c 31-40)"
-    echo "fd${hash:0:2}:${hash:2:4}:${hash:6:4}::/64"
+    echo "fd${hash:0:2}:${hash:2:4}:${hash:6:4}::1/64"
     exit
   fi
   echo "warning: can't gnerate IPv6." >&2
@@ -155,6 +155,8 @@ if [[ $IPv6 ]] ; then
   CONTENT+="PostUp=ip6tables -t nat -I POSTROUTING -o $INTERFACE -j MASQUERADE"$'\n'
   CONTENT+="PreDown=ip6tables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE"$'\n'
 fi
+
+CONTENT+="DNS=1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"$'\n'
 
 $VERBOSE "$CONTENT"
 echo "$CONTENT" > "${OUTPUT_DIR}/${CONF_NAME}"
