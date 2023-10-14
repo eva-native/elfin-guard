@@ -1,7 +1,13 @@
 #!/bin/bash
 
 PROGRAM=${0##*/}
-VERSION="0.0.1a"
+VERSION="0.0.1b"
+VERBOSE=":"
+
+function abort {
+  printf "%s\n" "$1" >&2
+  exit 1
+}
 
 function make_ipv6 {
   if [[ -f /etc/machine-id ]] ; then
@@ -24,12 +30,9 @@ KEY_NAME="server"
 CONF_NAME="wg0.conf"
 OUTPUT_DIR="/etc/wireguard"
 
-VERBOSE=":"
-
 function usage {
   cat <<-EoN
 usage $PROGRAM (-p [PORT]|-4 [IPv4]|-6 [IPv6]|-o [DIR])
-  --help      -h  Print this message
   --port      -p  Define port (Default: $PORT)
   --ipv4      -4  Define IPv4 (Default: $IPv4)
   --ipv6      -6  Define IPv6 (Default: $IPv6)
@@ -39,12 +42,8 @@ usage $PROGRAM (-p [PORT]|-4 [IPv4]|-6 [IPv6]|-o [DIR])
   --output    -o  Define output directory (Default: $OUTPUT_DIR)
   --verbose   -v  Verbose output (Default: off)
   --version   -V  Display version ($VERSION)
+  --help      -h  Print this message
 EoN
-}
-
-function abort {
-  printf "%s\n" "$1" >&2
-  exit 1
 }
 
 while getopts ":-:p:4:6:i:k:c:o:hvV" OPT ; do
@@ -56,7 +55,7 @@ while getopts ":-:p:4:6:i:k:c:o:hvV" OPT ; do
     k ) KEY_NAME="$OPTARG" ;;
     c ) CONF_NAME="$OPTARG" ;;
     o ) OUTPUT_DIR="$OPTARG" ;;
-    h ) usage ; exit 1 ;;
+    h ) usage ; exit 0 ;;
     v ) VERBOSE="echo" ;;
     V ) echo "$VERSION" && exit 0 ;;
     - )
@@ -136,8 +135,6 @@ if [[ $IPv6 ]] && [[ "$(</proc/sys/net/ipv6/conf/all/forwarding)" = "0" ]] ; the
   echo "net.ipv6.conf.all.forwarding = 1" 2>/dev/null >> /etc/sysctl.conf
   [[ $? ]] && echo "warning: can't enable IPv6 forwarding" >&2
 fi
-
-CONTENT=""
 
 CONTENT+="[Interface]"$'\n'
 CONTENT+="PrivateKey=$PRIVATE_KEY"$'\n'
