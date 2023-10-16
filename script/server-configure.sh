@@ -1,11 +1,15 @@
 #!/bin/bash
 
-PROGRAM=${0##*/}
+PROGRAM="${0##*/}"
 VERSION="0.0.1b"
 VERBOSE=":"
 
-function abort {
+function warn {
   printf "%s\n" "$1" >&2
+}
+
+function abort {
+  warn "$1"
   exit 1
 }
 
@@ -25,6 +29,7 @@ PUBLIC_KEY="$(echo $PRIVATE_KEY | wg pubkey)"
 PORT="55555"
 IPv4="172.16.0.1/12"
 IPv6="$(make_ipv6)"
+MTU="1500"
 INTERFACE="$(ip route show default | awk '{ print $5 }')"
 KEY_NAME="server"
 CONF_NAME="wg0.conf"
@@ -32,10 +37,11 @@ OUTPUT_DIR="/etc/wireguard"
 
 function usage {
   cat <<-EoN
-usage $PROGRAM (-p [PORT]|-4 [IPv4]|-6 [IPv6]|-o [DIR])
+usage $PROGRAM (-p [PORT]|-4 [IPv4]|-6 [IPv6]|-o [DIR]|-m [MTU])
   --port      -p  Define port (Default: $PORT)
   --ipv4      -4  Define IPv4 (Default: $IPv4)
   --ipv6      -6  Define IPv6 (Default: $IPv6)
+  --mtu       -m  Define MTU (Default: $MTU)
   --interface -i  Define interface (Default: $INTERFACE)
   --key       -k  Define file name (Default: $KEY_NAME)
   --conf      -c  Define output config name (Default: $CONF_NAME)
@@ -51,6 +57,7 @@ while getopts ":-:p:4:6:i:k:c:o:hvV" OPT ; do
     p ) PORT="$OPTARG" ;;
     4 ) IPv4="$OPTARG" ;;
     6 ) IPv6="$OPTARG" ;;
+    m ) MTU="$OPTARG" ;;
     i ) INTERFACE="$OPTARG" ;;
     k ) KEY_NAME="$OPTARG" ;;
     c ) CONF_NAME="$OPTARG" ;;
@@ -75,6 +82,12 @@ while getopts ":-:p:4:6:i:k:c:o:hvV" OPT ; do
         ipv6=* ) IPv6="${OPTARG#*=}" ;;
         ipv6   )
           IPv6="${!OPTIND}"
+          let OPTIND++
+        ;;
+
+        mtu=* ) MTU="${OPTARG#*=}" ;;
+        mtu   )
+          MTU="${!OPTIND}"
           let OPTIND++
         ;;
 
@@ -120,7 +133,9 @@ touch "$OUTPUT_DIR/$KEY_NAME" 2>/dev/null || abort "error: not enough permission
 touch "$OUTPUT_DIR/$KEY_NAME.pub" 2>/dev/null || abort "error: not enough permissions"
 
 echo "$PRIVATE_KEY" > "$OUTPUT_DIR/$KEY_NAME"
+$VERBOSE "info: private key writen to $OUTPUT_DIR/$KEY_NAME"
 echo "$PUBLIC_KEY" > "$OUTPUT_DIR/$KEY_NAME.pub"
+$VERBOSE "info: public key writen to $OUTPUT_DIR/$KEY_NAME.pub"
 
 chmod go= "$OUTPUT_DIR/$KEY_NAME"
 
@@ -131,9 +146,20 @@ if [[ "$(</proc/sys/net/ipv4/ip_forward)" = "0" ]] ; then
   [[ $? ]] && echo "warning: can't enable IPv4 forwarding" >&2
 fi
 
+$VERBOSE "info: ipv4 forwarding enabled"
+
 if [[ $IPv6 ]] && [[ "$(</proc/sys/net/ipv6/conf/all/forwarding)" = "0" ]] ; then
   echo "net.ipv6.conf.all.forwarding = 1" 2>/dev/null >> /etc/sysctl.conf
   [[ $? ]] && echo "warning: can't enable IPv6 forwarding" >&2
+fi
+
+$VERBOSE "info: ipv6 forwarding enabled"
+
+if [[ $(ufw allow $PORT/udp) ]] ; then
+  $VERBOSE "info: ufw allow $PORT/udp"
+  $VERBOSE "info: pls restart firewall"
+else
+  warn "warn: 'ufw allow $PORT/udp' failed, open port manualy"
 fi
 
 CONTENT+="[Interface]"$'\n'
@@ -153,7 +179,6 @@ if [[ $IPv6 ]] ; then
   CONTENT+="PreDown=ip6tables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE"$'\n'
 fi
 
-CONTENT+="DNS=1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"$'\n'
-
+$VERBOSE "info: config:"
 $VERBOSE "$CONTENT"
 echo "$CONTENT" > "${OUTPUT_DIR}/${CONF_NAME}"

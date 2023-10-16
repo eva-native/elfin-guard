@@ -16,7 +16,7 @@ function clean_addr {
 
 function usage {
   cat <<-EoN
-usage $PROGRAM [CONF_FILE] [PUBLIC_KEY]
+usage $PROGRAM (-i[INTERFACE]) [CONF_FILE] [PUBLIC_KEY]
   --interface -i  Set wireguard interface (Default: wg0)
   --verbose   -v  Verbose output (Default: off)
   --version   -V  Display version ($VERSION)
@@ -24,7 +24,7 @@ usage $PROGRAM [CONF_FILE] [PUBLIC_KEY]
 EoN
 }
 
-while getopts ":i:hvV" OPT ; do
+while getopts ":-:i:hvV" OPT ; do
   case $OPT in
     i ) INTERFACE="$OPTARG" ;;
     h ) usage ; exit 0 ;;
@@ -62,4 +62,4 @@ while read -r line ; do
   ADDRESSES+="$(clean_addr $line),"
 done < <(cat $CONF_FILE|sed -n "/Address=\+/p")
 
-echo "wg set $INTERFACE peer $PUBLIC_KEY allowed-ips ${ADDRESSES%,}"
+wg set $INTERFACE peer $PUBLIC_KEY allowed-ips ${ADDRESSES%,}
